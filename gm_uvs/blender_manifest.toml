@@ -1,6 +1,6 @@
 schema_version = "1.0.0"
 id = "gm_uvs"
-version = "0.2.1"
+version = "0.2.2"
 name = "GM UVs"
 tagline = "Game Makers UVs: UV tools for game artists"
 maintainer = "Game Makers"

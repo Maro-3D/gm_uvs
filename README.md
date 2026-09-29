@@ -22,13 +22,12 @@ The add-on gathers UV loops and islands like UniV's alignment workflow. In verte
 
 The **Gravity (Z)** button below the compass orients selected UV islands to the object's world-space direction, like UniV's Gravity tool. It preserves each island's center and works without UniV installed. The redo panel also offers X/Y axes, Flip, Additional Angle, and Correct Aspect.
 
-The **UV Tools** box has native **Quadrify**, **Weld**, and **Weld by Distance** buttons. Quadrify turns connected selected quads into a rectangular UV grid; non-quad and unselected faces stay in place. The panel exposes **Mark Seams**, **Correct Aspect**, and **Scale Independently**, all enabled by default. Scale Independently balances U and V using the quads' 3D proportions, while Correct Aspect accounts for the active image dimensions; Mark Seams marks split UV boundaries. **Weld** now uses the bundled UniV 4.0.0 Weld implementation, including its Stitch fallback for separate UV islands, partial-edge welding, paired selection, and distance modes. It works without a separate UniV installation.
-
+The **UV Tools** box uses bundled **UniV 4.0.0 Quadrify and Weld** implementations. Quadrify includes UniV's quad propagation, normalization, and handling of connected unselected corners. **Mark Seams**, **Correct Aspect**, and **Scale Independently** are enabled by default. Correct Aspect uses UniV's material-image lookup. The redo panel also exposes Unlink, Shear, and Use Texel Density. Weld includes UniV's Stitch fallback for separate UV islands, partial-edge welding, paired selection, and distance modes. Both tools work without a separate UniV installation.
 For alignment, the target is the 0–1 UV canvas. If the selection already touches an edge, that axis may not move. The status line below the buttons shows how many UV corners were found and the computed U/V offset. The operator supports UV Sync Selection, multi-object Edit Mode, and Undo. Other tool sections remain placeholders.
 
 ## Development
 
-The development extension points to this repository's `gm_uvs` folder. Blender keeps loaded Python code in memory. After a source change, disable and re-enable GM UVs in Preferences > Get Extensions, or restart Blender. The current heading is **Align UV Islands to Canvas**.
+The development extension points to this repository's `gm_uvs` folder. Blender keeps loaded Python code in memory. After a source change, restart Blender to reload the bundled modules. The current heading is **Align UV Islands to Canvas**.
 
 Run the regression test with Blender:
 
@@ -41,5 +40,5 @@ blender --background --factory-startup --python-exit-code 1 --python tests/test_
 
 The alignment test uses a small UV cross inside the canvas, checks all eleven buttons with UV Sync on and off, checks whole-island movement from one selected face, and forces garbage collection between selection and movement to catch invalid BMesh loops.
 
-The alignment and Gravity structures are adapted from [UniV's transform implementation](https://github.com/Oxicid/UniV/blob/main/operators/transform.py). Quadrify follows UniV's [Quadrify](https://github.com/Oxicid/UniV/blob/main/operators/quadrify.py) design. Weld bundles UniV's [original implementation](https://github.com/Oxicid/UniV/blob/main/operators/stitch_and_weld.py) and required core modules; see [VENDORED.md](gm_uvs/_univ/VENDORED.md). UniV and GM UVs are licensed under GPL-3.0-or-later.
+The alignment and Gravity structures are adapted from [UniV's transform implementation](https://github.com/Oxicid/UniV/blob/main/operators/transform.py). Quadrify and Weld bundle UniV's original operators and their required core modules; see [VENDORED.md](gm_uvs/_univ/VENDORED.md). UniV and GM UVs are licensed under GPL-3.0-or-later.
 

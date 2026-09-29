@@ -1,29 +1,23 @@
-"""Default UniV 4.0.0 preferences used by its bundled Weld core.
-
-The full UniV preferences UI imports unrelated operators. These values match
-UniV's defaults for the settings reached by Weld and its Stitch fallback.
-"""
+"""RNA settings adapter for the bundled UniV operators."""
 import bpy
-from types import SimpleNamespace
 
-_DEFAULTS = SimpleNamespace(
-    max_pick_distance=75,
-    overlay_2d_uv_edge_seam_color=(0.8, 0.0, 0.0, 0.25),
-    use_texel=False,
-    size_x="2048",
-    size_y="2048",
-    texel_density=512.0,
-)
+
+class GMUVS_PG_univ_settings(bpy.types.PropertyGroup):
+    max_pick_distance: bpy.props.IntProperty(default=75, min=1)
+    overlay_2d_uv_edge_seam_color: bpy.props.FloatVectorProperty(
+        size=4, subtype="COLOR", default=(0.8, 0.0, 0.0, 0.25))
+    use_texel: bpy.props.BoolProperty(name="Use Texel Density", default=False)
+    size_x: bpy.props.StringProperty(default="2048")
+    size_y: bpy.props.StringProperty(default="2048")
+    texel_density: bpy.props.FloatProperty(default=512.0, min=0.001)
 
 
 def prefs():
-    # Honor the user's UniV settings when that extension is enabled; GM UVs
-    # still works alone using UniV's own defaults above.
     addons = bpy.context.preferences.addons
     for name in addons.keys():
         if name == "univ" or name.endswith(".univ"):
             return addons[name].preferences
-    return _DEFAULTS
+    return bpy.context.scene.gm_uvs_univ_settings
 
 
 def univ_settings():

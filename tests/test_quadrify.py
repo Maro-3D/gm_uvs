@@ -42,6 +42,7 @@ for face in faces:
         loop[uv].uv = (0.1 + 0.2 * x + 0.03 * y, 0.2 + 0.2 * y + 0.02 * x)
 bpy.context.scene.tool_settings.use_uv_select_sync = True
 bpy.context.scene.tool_settings.mesh_select_mode = (False, False, True)
+bpy.ops.mesh.select_all(action='SELECT')
 gm_uvs.register()
 with bpy.context.temp_override(area=area, region=ui):
     assert bpy.ops.uv.gm_uvs_quadrify() == {"FINISHED"}
@@ -70,8 +71,16 @@ for face in faces:
 for face in faces:
     for loop in face.loops:
         loop.uv_select_vert = face is faces[0]
+        loop.uv_select_edge = face is faces[0]
+    face.uv_select = face is faces[0]
 image = bpy.data.images.new("AspectTest", width=512, height=256)
 area.spaces.active.image = image
+material = bpy.data.materials.new('AspectMaterial')
+material.use_nodes = True
+node = material.node_tree.nodes.new('ShaderNodeTexImage')
+node.image = image
+material.node_tree.nodes.active = node
+mesh.materials.append(material)
 
 def reset_square():
     for loop in faces[0].loops:
@@ -85,33 +94,33 @@ def uv_ratio():
 
 reset_square()
 with bpy.context.temp_override(area=area, region=ui):
-    assert bpy.ops.uv.gm_uvs_quadrify(mark_seams=False,
-        scale_independently=False, use_correct_aspect=True) == {"FINISHED"}
+    assert bpy.ops.uv.gm_uvs_quadrify(mark_seam=False,
+        xy_scale=False, use_aspect=True) == {"FINISHED"}
 assert abs(uv_ratio() - 1.0) < 1e-4, uv_ratio()
 reset_square()
 with bpy.context.temp_override(area=area, region=ui):
-    assert bpy.ops.uv.gm_uvs_quadrify(mark_seams=False,
-        scale_independently=True, use_correct_aspect=False) == {"FINISHED"}
+    assert bpy.ops.uv.gm_uvs_quadrify(mark_seam=False,
+        xy_scale=True, use_aspect=False) == {"FINISHED"}
 assert abs(uv_ratio() - 2.0) < 1e-4, uv_ratio()
 reset_square()
 with bpy.context.temp_override(area=area, region=ui):
-    assert bpy.ops.uv.gm_uvs_quadrify(mark_seams=False,
-        scale_independently=True, use_correct_aspect=True) == {"FINISHED"}
+    assert bpy.ops.uv.gm_uvs_quadrify(mark_seam=False,
+        xy_scale=True, use_aspect=True) == {"FINISHED"}
 assert abs(uv_ratio() - 1.0) < 1e-4, uv_ratio()
 
 # Mark Seams follows the option on a selected quad's split boundary.
 shared.edge.seam = False
 reset_square()
 with bpy.context.temp_override(area=area, region=ui):
-    assert bpy.ops.uv.gm_uvs_quadrify(mark_seams=True,
-        scale_independently=True, use_correct_aspect=True) == {"FINISHED"}
+    assert bpy.ops.uv.gm_uvs_quadrify(mark_seam=True,
+        xy_scale=True, use_aspect=True) == {"FINISHED"}
 assert shared.edge.seam
 shared.edge.seam = False
 reset_square()
 with bpy.context.temp_override(area=area, region=ui):
-    assert bpy.ops.uv.gm_uvs_quadrify(mark_seams=False,
-        scale_independently=True, use_correct_aspect=True) == {"FINISHED"}
+    assert bpy.ops.uv.gm_uvs_quadrify(mark_seam=False,
+        xy_scale=True, use_aspect=True) == {"FINISHED"}
 assert not shared.edge.seam
 
 gm_uvs.unregister()
-print("PASS: native Quadrify options and UV grid layout")
+print("PASS: UniV Quadrify options and UV grid layout")

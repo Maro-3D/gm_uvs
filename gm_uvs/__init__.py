@@ -6,6 +6,8 @@ from mathutils import Matrix, Vector
 from bpy.props import BoolProperty, EnumProperty, FloatProperty
 from .quadrify import GMUVS_OT_quadrify
 from .univ_weld import GMUVS_OT_weld
+from ._univ.preferences import GMUVS_PG_univ_settings
+from ._univ.draw.shaders import Shaders
 
 
 # Selection and island movement follow the approach used by UniV:
@@ -447,14 +449,10 @@ class GMUVS_PT_main(bpy.types.Panel):
         box.label(text="UV Tools")
         row = box.row(align=True)
         quadrify = row.operator("uv.gm_uvs_quadrify", text="Quadrify")
-        quadrify.mark_seams = context.scene.gm_uvs_quad_mark_seams
-        quadrify.use_correct_aspect = context.scene.gm_uvs_quad_correct_aspect
-        quadrify.scale_independently = context.scene.gm_uvs_quad_scale_independently
+        quadrify.mark_seam = context.scene.gm_uvs_quad_mark_seams
+        quadrify.use_aspect = context.scene.gm_uvs_quad_correct_aspect
+        quadrify.xy_scale = context.scene.gm_uvs_quad_scale_independently
         row.operator("uv.gm_uvs_weld", text="Weld")
-        settings = box.column(align=True)
-        settings.prop(context.scene, "gm_uvs_quad_mark_seams", text="Mark Seams")
-        settings.prop(context.scene, "gm_uvs_quad_correct_aspect", text="Correct Aspect")
-        settings.prop(context.scene, "gm_uvs_quad_scale_independently", text="Scale Independently")
         box.operator("uv.gm_uvs_weld", text="Weld by Distance").use_by_distance = True
         for title, items in (
             ("Texel Density", ("Get Density", "Set Density")),
@@ -471,7 +469,15 @@ class GMUVS_PT_main(bpy.types.Panel):
 classes = (GMUVS_OT_align, GMUVS_OT_gravity, GMUVS_OT_quadrify, GMUVS_OT_weld, GMUVS_PT_main)
 
 
+def _init_shaders():
+    Shaders.init_shaders()
+
+
 def register():
+    bpy.utils.register_class(GMUVS_PG_univ_settings)
+    bpy.types.Scene.gm_uvs_univ_settings = bpy.props.PointerProperty(type=GMUVS_PG_univ_settings)
+    if not bpy.app.background:
+        bpy.app.timers.register(_init_shaders)
     bpy.types.Scene.gm_uvs_quad_mark_seams = BoolProperty(
         name="Mark Seams", default=True)
     bpy.types.Scene.gm_uvs_quad_correct_aspect = BoolProperty(
@@ -482,7 +488,29 @@ def register():
         bpy.utils.register_class(cls)
 
 
+def _clear_draw_handlers():
+    from ._univ.draw import LinesDrawSimple, LinesDrawSimple3D, DotLinesDrawSimple, TextDraw
+    image_editor = bpy.types.SpaceImageEditor
+    view3d = bpy.types.SpaceView3D
+    for draw_class, space, timer in (
+        (LinesDrawSimple, image_editor, LinesDrawSimple.uv_area_draw_timer),
+        (DotLinesDrawSimple, image_editor, DotLinesDrawSimple.uv_area_draw_timer),
+        (LinesDrawSimple3D, view3d, LinesDrawSimple3D.univ_view3d_draw_timer),
+        (TextDraw, image_editor if TextDraw.target_area == "UV" else view3d,
+         TextDraw.uv_area_draw_timer),
+    ):
+        if bpy.app.timers.is_registered(timer):
+            bpy.app.timers.unregister(timer)
+        if draw_class.handler is not None:
+            space.draw_handler_remove(draw_class.handler, "WINDOW")
+            draw_class.handler = None
+
 def unregister():
+    _clear_draw_handlers()
+    if bpy.app.timers.is_registered(_init_shaders):
+        bpy.app.timers.unregister(_init_shaders)
+    del bpy.types.Scene.gm_uvs_univ_settings
+    bpy.utils.unregister_class(GMUVS_PG_univ_settings)
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
     del bpy.types.Scene.gm_uvs_quad_scale_independently
