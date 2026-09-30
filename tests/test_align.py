@@ -6,6 +6,7 @@ import bmesh
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import gm_uvs
+from gm_uvs import transform as selection
 
 gm_uvs.register()
 bpy.ops.object.select_all(action="SELECT")
@@ -100,10 +101,10 @@ for loop, uv in zip(loops, initial):
     loop[layer].uv = uv
 for face in bm.faces:
     face.select_set(False)
-island = max(gm_uvs._uv_island_faces(bm, layer), key=len)
+island = max(selection._uv_island_faces(bm, layer), key=len)
 assert len(island) > 1
 island[0].select_set(True)
-selected_group = gm_uvs.selected_uvs(bpy.context)
+selected_group = selection.selected_uvs(bpy.context)
 assert len(selected_group) == 1
 selected_loops = set(selected_group[0][3])
 assert len(selected_loops) == sum(len(face.loops) for face in island)
@@ -123,14 +124,14 @@ checks += 1
 
 # The operator must survive collection between selection gathering and UV access.
 import gc
-original_selected_uvs = gm_uvs.selected_uvs
+original_selected_uvs = selection.selected_uvs
 
 def selected_uvs_with_collection(context):
     groups = original_selected_uvs(context)
     gc.collect()
     return groups
 
-gm_uvs.selected_uvs = selected_uvs_with_collection
+selection.selected_uvs = selected_uvs_with_collection
 for loop, uv in zip(loops, initial):
     loop[layer].uv = uv
 for face in bm.faces:
@@ -139,7 +140,7 @@ bmesh.update_edit_mesh(obj.data)
 with bpy.context.temp_override(area=area, region=ui):
     assert bpy.ops.uv.gm_uvs_align(direction="BOTTOM_LEFT") == {"FINISHED"}
 assert min(loop[layer].uv.x for loop in loops) < 1e-6
-gm_uvs.selected_uvs = original_selected_uvs
+selection.selected_uvs = original_selected_uvs
 checks += 1
 
 gm_uvs.unregister()

@@ -1,14 +1,43 @@
 # SPDX-FileCopyrightText: 2026 Oxicid
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+"""Temporary UV seam and stitch overlays used by Weld."""
 import bpy
 import gpu
-import numpy.typing as npt
 import mathutils
-from . import shaders
-
+import numpy.typing as npt
 from time import perf_counter as time
 from gpu_extras.batch import batch_for_shader
+
+
+POLYLINE_UNIFORM_COLOR_2D = None
+VK_ENABLED = False
+
+
+def init_shaders():
+    global POLYLINE_UNIFORM_COLOR_2D, VK_ENABLED
+    VK_ENABLED = gpu.platform.backend_type_get() == 'VULKAN'
+    POLYLINE_UNIFORM_COLOR_2D = gpu.shader.from_builtin(
+        'POLYLINE_UNIFORM_COLOR' if VK_ENABLED else 'UNIFORM_COLOR')
+
+
+def set_line_width(width):
+    if not VK_ENABLED:
+        gpu.state.line_width_set(width)
+
+
+def set_line_width_vk(shader, width=2.0):
+    if VK_ENABLED:
+        shader.uniform_float('viewportSize', gpu.state.viewport_get()[2:])
+        shader.uniform_float('lineWidth', width)
+
+
+def blend_set_alpha():
+    gpu.state.blend_set('ALPHA')
+
+
+def blend_set_none():
+    gpu.state.blend_set('NONE')
 
 
 class LinesDrawSimple:
@@ -27,7 +56,7 @@ class LinesDrawSimple:
         cls.start_time = time()
         cls.color = color
 
-        cls.shader = shaders.POLYLINE_UNIFORM_COLOR_2D
+        cls.shader = POLYLINE_UNIFORM_COLOR_2D
         cls.batch = batch_for_shader(cls.shader, 'LINES', {"pos": data})
 
         sima = bpy.types.SpaceImageEditor
@@ -61,81 +90,19 @@ class LinesDrawSimple:
         if bpy.context.area.ui_type != 'UV':
             return
 
-        shaders.set_line_width(2)
-        shaders.blend_set_alpha()
+        set_line_width(2)
+        blend_set_alpha()
 
         cls.shader.bind()
         cls.shader.uniform_float("color", cls.color)
-        shaders.set_line_width_vk(cls.shader)
+        set_line_width_vk(cls.shader)
         cls.batch.draw(cls.shader)
 
-        shaders.set_line_width(1)
-        shaders.blend_set_none()
+        set_line_width(1)
+        blend_set_none()
 
 
-class LinesDrawSimple3D:
-    start_time = time()
-    max_draw_time = 1.5
-    handler: None = None
-    shader: gpu.types.GPUShader | None = None
-    batch: gpu.types.GPUBatch | None = None
-    color: tuple = (1, 1, 0, 1)
-    # target_area: bpy.types.Area = None
-
-    @classmethod
-    def draw_register(cls, data: list[mathutils.Vector] | npt.NDArray, color: tuple = (1, 1, 0, 1)):
-        if not len(data):
-            return
-        cls.start_time = time()
-        cls.color = color
-
-        cls.shader = shaders.POLYLINE_UNIFORM_COLOR_3D
-        cls.batch = batch_for_shader(cls.shader, 'LINES', {"pos": data})
-
-        v3d = bpy.types.SpaceView3D
-        if not (cls.handler is None):
-            v3d.draw_handler_remove(cls.handler, 'WINDOW')
-
-        cls.handler = v3d.draw_handler_add(cls.draw_callback_px, (), 'WINDOW', 'POST_VIEW')
-        bpy.app.timers.register(cls.univ_view3d_draw_timer)
-
-    @classmethod
-    def univ_view3d_draw_timer(cls):
-        if cls.handler is None:
-            cls.max_draw_time = 1.5
-            return None
-        counter = time() - cls.start_time
-
-        if counter < cls.max_draw_time:
-            return 0.2
-        bpy.types.SpaceView3D.draw_handler_remove(cls.handler, 'WINDOW')
-
-        for a in bpy.context.screen.areas:
-            if a.type == 'VIEW_3D':
-                a.tag_redraw()
-
-        cls.handler = None
-        cls.max_draw_time = 1.5
-        return None
-
-    @classmethod
-    def draw_callback_px(cls):
-        if bpy.context.area.type != 'VIEW_3D':
-            return
-
-        shaders.set_line_width(2)
-        shaders.blend_set_alpha()
-
-        cls.shader.bind()
-        cls.shader.uniform_float("color", cls.color)
-        shaders.set_line_width_vk(cls.shader)
-        cls.batch.draw(cls.shader)
-
-        shaders.set_line_width(1)
-        shaders.blend_set_none()
-
-
-class DotLinesDrawSimple:
+class DotLinesDrawSimple(LinesDrawSimple):
     start_time = time()
     max_draw_time = 1.5
     handler: None = None
@@ -171,23 +138,6 @@ class DotLinesDrawSimple:
         cls.handler = sima.draw_handler_add(cls.draw_callback_px, (), 'WINDOW', 'POST_VIEW')
         bpy.app.timers.register(cls.uv_area_draw_timer)
 
-    @classmethod
-    def uv_area_draw_timer(cls):
-        if cls.handler is None:
-            cls.max_draw_time = 1.5
-            return None
-        counter = time() - cls.start_time
-
-        if counter < cls.max_draw_time:
-            return 0.2
-        bpy.types.SpaceImageEditor.draw_handler_remove(cls.handler, 'WINDOW')
-
-        for a in bpy.context.screen.areas:
-            if a.type == 'IMAGE_EDITOR' and a.ui_type == 'UV':
-                a.tag_redraw()
-        cls.handler = None
-        cls.max_draw_time = 1.5
-        return None
 
     @classmethod
     def draw_callback_px(cls):
@@ -195,12 +145,12 @@ class DotLinesDrawSimple:
         if area.ui_type != 'UV':
             return
 
-        shaders.set_line_width(3)
-        shaders.blend_set_alpha()
+        set_line_width(3)
+        blend_set_alpha()
 
         cls.shader.bind()
 
-        from .. import utypes
+        from . import utypes
         reg = next(r for r in area.regions if r.type == 'WINDOW')
         zoom = utypes.View2D.get_zoom(reg.view2d) / 10
 
@@ -208,11 +158,11 @@ class DotLinesDrawSimple:
         cls.shader.uniform_float("vpm", matrix)
         cls.shader.uniform_float("color", cls.color)
         cls.shader.uniform_float("scale", zoom)
-        # shaders.set_line_width_vk(cls.shader)  # TODO: Dot shader not support line_width
+        # set_line_width_vk(cls.shader)  # TODO: Dot shader not support line_width
         cls.batch.draw(cls.shader)
 
-        shaders.set_line_width(1)
-        shaders.blend_set_none()
+        set_line_width(1)
+        blend_set_none()
 
     @classmethod
     def create_shader_info(cls):
@@ -245,3 +195,25 @@ class DotLinesDrawSimple:
         )
 
         cls.shader = gpu.shader.create_from_info(shader_info)
+
+
+def extract_edges_with_seams(umesh: 'utypes.UMesh'):
+    edges = []
+    edges_append = edges.append
+
+    if umesh.is_full_face_selected:
+        for e in umesh.bm.edges:
+            if e.seam and hasattr(e, 'link_loops'):
+                edges_append(e)
+    else:
+        if umesh.sync:
+            for e in umesh.bm.edges:
+                if e.seam and hasattr(e, 'link_loops'):
+                    edges_append(e)
+        else:
+            if umesh.is_full_face_deselected:
+                return []
+            for e in umesh.bm.edges:
+                if e.seam and hasattr(e, 'link_loops'):
+                    edges_append(e)
+    return edges

@@ -12,11 +12,11 @@ from mathutils import Vector, Matrix
 from bmesh.types import BMLoop, BMFace
 from collections.abc import Callable
 
-from .. import utils
-from .. import utypes
-from ..preferences import univ_settings
-from ..utypes import AdvIslands, AdvIsland, UMeshes
-from ..utils import linked_crn_uv_by_face_tag_unordered_included
+from . import utils
+from . import utypes
+from .preferences import univ_settings
+from .utypes import AdvIslands, AdvIsland, UMeshes
+from .utils import linked_crn_uv_by_face_tag_unordered_included
 
 QUAD_SIZE = 4
 
@@ -40,7 +40,7 @@ class UNIV_OT_Quadrify(bpy.types.Operator):
         return context.mode == 'EDIT_MESH'
 
     def invoke(self, context, event):
-        from ..preferences import prefs
+        from .preferences import prefs
         self.max_distance = utils.get_max_distance_from_px(prefs().max_pick_distance, context.region.view2d)
         self.mouse_pos = None
         if event.value == 'PRESS':
@@ -132,7 +132,6 @@ class UNIV_OT_Quadrify(bpy.types.Operator):
                             crn.edge.seam = is_boundary(crn)
 
 
-
         if selected_non_quads_counter:
             self.report({'WARNING'}, f"Ignored {selected_non_quads_counter} non-quad faces")
         elif not counter:
@@ -169,17 +168,17 @@ class UNIV_OT_Quadrify(bpy.types.Operator):
         quad_islands.calc_flat_unique_uv_coords()
         quad_islands.calc_flat_3d_coords(save_triplet=True, scale=umesh.value)
         quad_islands.calc_area_3d(umesh.value, areas_to_weight=True)  # umesh.value == obj scale
-        from .texel import UNIV_OT_Normalize_VIEW3D
+        from . import normalize
         for isl in quad_islands:
             old_center = isl.bbox.center
             isl.value = old_center
-            new_center = UNIV_OT_Normalize_VIEW3D.individual_scale(self, isl)  # noqa
+            new_center = normalize.individual_scale(self, isl)  # noqa
             isl.value = new_center
             if len(quad_islands) == 1:
                 isl.set_position(old_center, new_center)
         if len(quad_islands) > 1:
-            tot_area_uv, tot_area_3d = UNIV_OT_Normalize_VIEW3D.avg_by_frequencies(self, quad_islands)  # noqa
-            UNIV_OT_Normalize_VIEW3D.normalize(self, quad_islands, tot_area_uv, tot_area_3d)  # noqa
+            tot_area_uv, tot_area_3d = normalize.avg_by_frequencies(self, quad_islands)  # noqa
+            normalize.normalize(self, quad_islands, tot_area_uv, tot_area_3d)  # noqa
 
     def quadrify_pick(self):
         hit = utypes.IslandHit(self.mouse_pos, self.max_distance)

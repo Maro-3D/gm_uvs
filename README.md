@@ -27,18 +27,65 @@ For alignment, the target is the 0–1 UV canvas. If the selection already touch
 
 ## Development
 
-The development extension points to this repository's `gm_uvs` folder. Blender keeps loaded Python code in memory. After a source change, restart Blender to reload the bundled modules. The current heading is **Align UV Islands to Canvas**.
+The development extension points to this repository's `gm_uvs` folder. Blender keeps loaded Python code in memory. After a source change, restart Blender to reload the bundled modules.
 
-Run the regression test with Blender:
+### Source layout
+
+```text
+gm_uvs/
+  __init__.py          Registration, settings, and Quadrify/Weld adapters
+  blender_manifest.toml
+  transform.py        Align, Gravity, and their shared UV selection
+  ui.py               Sidebar panel
+  _univ/
+    quadrify.py       Quad propagation
+    weld.py           Welding and internal Stitch fallback
+    normalize.py      Quadrify normalization math
+    draw.py           Temporary UV overlays
+    preferences.py    Optional UniV preferences and local defaults
+    utils/            Context, selection, and geometry helpers (3 files)
+    utypes/           Mesh/island types and UV picking (7 files)
+    LICENSE
+    VENDORED.md
+tests/                Blender regression scripts
+```
+
+There are 19 Python files in the add-on, including package initializers.
+Keep registration in `__init__.py`, panel layout in `ui.py`, and the native
+tools in `transform.py`. The reduced UniV implementation lives under `_univ`;
+record changes to it in [VENDORED.md](gm_uvs/_univ/VENDORED.md).
+
+### Validation
+
+Run the regression tests with Blender 5.0+:
 
 ```powershell
 blender --background --factory-startup --python-exit-code 1 --python tests/test_align.py
 blender --background --factory-startup --python-exit-code 1 --python tests/test_gravity.py
 blender --background --factory-startup --python-exit-code 1 --python tests/test_quadrify.py
 blender --background --factory-startup --python-exit-code 1 --python tests/test_weld.py
+blender --background --factory-startup --python-exit-code 1 --python tests/test_normalize.py
+blender --background --factory-startup --python-exit-code 1 --python tests/test_registration.py
+blender --background --factory-startup --python-exit-code 1 --python tests/test_workflows.py
 ```
 
 The alignment test uses a small UV cross inside the canvas, checks all eleven buttons with UV Sync on and off, checks whole-island movement from one selected face, and forces garbage collection between selection and movement to catch invalid BMesh loops.
 
-The alignment and Gravity structures are adapted from [UniV's transform implementation](https://github.com/Oxicid/UniV/blob/main/operators/transform.py). Quadrify and Weld bundle UniV's original operators and their required core modules; see [VENDORED.md](gm_uvs/_univ/VENDORED.md). UniV and GM UVs are licensed under GPL-3.0-or-later.
+Normalization tests compare eight combinations of Shear, Scale Independently,
+and Use Texel Density against the original add-on's Blender 5.0.1 results.
+Registration tests check repeated enable/disable and extension-style package
+imports. Workflow tests cover 50 combinations of selection modes, multi-object
+editing, distance welding, and picking without selected UVs. Their optional
+`--addon-root` and `--snapshot` arguments support comparisons with an older
+copy of the add-on.
+
+GPU tests exercise both overlay draw callbacks and cleanup, including disabling
+before shader startup. They need a separate foreground Blender process, which
+exits after the test; check its output for `PASS`:
+
+```powershell
+blender --factory-startup --python tests/test_gpu.py
+```
+
+The alignment and Gravity structures are adapted from [UniV's transform implementation](https://github.com/Oxicid/UniV/blob/main/operators/transform.py). Quadrify and Weld bundle UniV's operators and their required core modules, with unused standalone operators removed; see [VENDORED.md](gm_uvs/_univ/VENDORED.md). UniV and GM UVs are licensed under GPL-3.0-or-later.
 

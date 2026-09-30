@@ -1,11 +1,12 @@
 # SPDX-FileCopyrightText: 2026 Oxicid
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import bpy  # noqa: F401
-from .btypes import *
-from .bbox import *
-from .island import *
-from .loop_group import *
-from .mesh_island import *
-from .ray import *
-from .umesh import *
+from .btypes import PyBMesh, View2D
+from .bbox import BBox
+from .island import (
+    FaceIsland, AdvIsland, IslandsBaseTagFilterPre, IslandsBaseTagFilterPost,
+    IslandsBase, Islands, UnionIslandsController, UnionIslands, AdvIslands,
+)
+from .loop_group import LoopGroup, LoopGroups
+from .umesh import UMesh, UMeshes
+from .ray import IslandHit, CrnEdgeHit
