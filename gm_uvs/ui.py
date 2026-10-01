@@ -62,7 +62,6 @@ class GMUVS_PT_main(bpy.types.Panel):
         box.operator("uv.gm_uvs_weld", text="Weld by Distance").use_by_distance = True
         for title, items in (
             ("Texel Density", ("Get Density", "Set Density")),
-            ("Packing", ("Pack Islands",)),
         ):
             box = layout.box()
             box.label(text=title + " (Coming Soon)")
@@ -70,3 +69,26 @@ class GMUVS_PT_main(bpy.types.Panel):
             column.enabled = False
             for item in items:
                 column.label(text=item)
+        box = layout.box()
+        box.label(text="Packing")
+        scene = context.scene
+        row = box.row()
+        row.template_list("GMUVS_UL_pack_layers", "", scene, "gm_uvs_pack_layers",
+                          scene, "gm_uvs_pack_layer_index", rows=3)
+        column = row.column(align=True)
+        column.operator("uv.gm_uvs_pack_layer", text="", icon="ADD").action = "ADD"
+        column.operator("uv.gm_uvs_pack_layer", text="", icon="REMOVE").action = "REMOVE"
+        if scene.gm_uvs_pack_layers:
+            index = min(scene.gm_uvs_pack_layer_index, len(scene.gm_uvs_pack_layers)-1)
+            box.prop(scene.gm_uvs_pack_layers[index], "max_scale")
+            row = box.row(align=True)
+            row.operator("uv.gm_uvs_pack_layer", text="Assign Selected").action = "ASSIGN"
+            row.operator("uv.gm_uvs_pack_layer", text="Unassign").action = "UNASSIGN"
+        box.prop(scene, "gm_uvs_pack_margin")
+        box.prop(scene, "gm_uvs_pack_rotate")
+        box.prop(scene, "gm_uvs_pack_show_colors")
+        box.label(text="All visible islands; unassigned limit: 1x")
+        box.operator("uv.gm_uvs_pack", icon="UV")
+        if scene.gm_uvs_pack_result:
+            box.label(text=scene.gm_uvs_pack_result, icon="INFO")
+            box.label(text="Coverage measured at last pack")

@@ -8,6 +8,7 @@ from ._univ.weld import UNIV_OT_Weld
 from .ui import GMUVS_PT_main
 from ._univ.preferences import GMUVS_PG_univ_settings
 from ._univ import draw
+from . import packing
 
 
 class GMUVS_OT_quadrify(UNIV_OT_Quadrify):
@@ -22,7 +23,7 @@ class GMUVS_OT_weld(UNIV_OT_Weld):
 
 CLASSES = (
     GMUVS_PG_univ_settings, GMUVS_OT_align, GMUVS_OT_gravity,
-    GMUVS_OT_quadrify, GMUVS_OT_weld, GMUVS_PT_main,
+    GMUVS_OT_quadrify, GMUVS_OT_weld, *packing.CLASSES, GMUVS_PT_main,
 )
 QUADRIFY_SETTINGS = (
     ("gm_uvs_quad_mark_seams", "Mark Seams"),
@@ -38,6 +39,7 @@ def _init_shaders():
 def register():
     for cls in CLASSES:
         bpy.utils.register_class(cls)
+    packing.register_properties()
     bpy.types.Scene.gm_uvs_univ_settings = PointerProperty(type=GMUVS_PG_univ_settings)
     for name, label in QUADRIFY_SETTINGS:
         setattr(bpy.types.Scene, name, BoolProperty(name=label, default=True))
@@ -56,6 +58,7 @@ def _clear_draw_handlers():
 
 
 def unregister():
+    packing.unregister_properties()
     _clear_draw_handlers()
     if bpy.app.timers.is_registered(_init_shaders):
         bpy.app.timers.unregister(_init_shaders)
