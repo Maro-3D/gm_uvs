@@ -16,7 +16,7 @@ def is_uv_edit_mode(context):
 
 
 # Selection and island movement adapted from UniV (GPL-3.0-or-later).
-def _uv_island_faces(bm, uv_layer):
+def _uv_island_faces(bm, uv_layer, respect_seams=True):
     """Group visible faces across mesh edges that are continuous in UV space."""
     pending = set(face for face in bm.faces if not face.hide)
     while pending:
@@ -26,7 +26,7 @@ def _uv_island_faces(bm, uv_layer):
         while queue:
             face = queue.pop()
             for loop in face.loops:
-                if loop.edge.seam:
+                if respect_seams and loop.edge.seam:
                     continue
                 ends = {
                     loop.vert: loop[uv_layer].uv.copy(),
@@ -112,6 +112,100 @@ def selected_uvs(context):
             # Keep the edit BMesh alive while the operator holds its BMLoops.
             groups.append((obj.data, bm, uv_layer, loops))
     return groups
+
+
+class GMUVS_OT_align_edge(bpy.types.Operator):
+    """Rotate whole UV islands to align their selected edges with the grid"""
+    bl_idname = 'uv.gm_uvs_align_edge'
+    bl_label = 'Align Island by Edge'
+    bl_options = {'REGISTER', 'UNDO'}
+    direction: EnumProperty(name='Direction', items=(
+        ('VERTICAL', 'Vertical |', 'Rotate the island so its selected edge is vertical'),
+        ('HORIZONTAL', 'Horizontal —', 'Rotate the island so its selected edge is horizontal')),
+        default='VERTICAL')
+
+    @classmethod
+    def poll(cls, context):
+        return is_uv_edit_mode(context)
+
+    def execute(self, context):
+        sync = context.scene.tool_settings.use_uv_select_sync
+        target = pi/2 if self.direction == 'VERTICAL' else 0
+        count = 0
+        for obj in context.objects_in_mode_unique_data:
+            if obj.type != 'MESH':
+                continue
+            bm = bmesh.from_edit_mesh(obj.data)
+            uv = bm.loops.layers.uv.active
+            if uv is None:
+                continue
+            active = bm.select_history.active
+            changed = False
+            for faces in _uv_island_faces(bm, uv, respect_seams=False):
+                candidates = []
+                for face in faces:
+                    if not sync and not face.select:
+                        continue
+                    for loop in face.loops:
+                        selected = (loop.uv_select_edge if not sync or bm.uv_select_sync_valid
+                                    else loop.edge.select)
+                        if not selected:
+                            continue
+                        delta = loop.link_loop_next[uv].uv-loop[uv].uv
+                        if delta.length_squared > 1e-16:
+                            candidates.append((loop.edge is active, delta.length_squared, delta.copy()))
+                if not candidates:
+                    continue
+                # Prefer the active edge, otherwise the longest selected edge.
+                _, _, delta = max(candidates, key=lambda candidate: candidate[:2])
+                angle = (target-atan2(delta.y, delta.x)+pi/2) % pi-pi/2
+                loops = [loop for face in faces for loop in face.loops]
+                coords = [loop[uv].uv.copy() for loop in loops]
+                center = Vector(((min(p.x for p in coords)+max(p.x for p in coords))/2,
+                                 (min(p.y for p in coords)+max(p.y for p in coords))/2))
+                c, s = cos(angle), sin(angle)
+                for loop, p in zip(loops, coords):
+                    x, y = p-center
+                    loop[uv].uv = (center.x+c*x-s*y, center.y+s*x+c*y)
+                count += 1
+                changed = True
+            if changed:
+                bmesh.update_edit_mesh(obj.data, loop_triangles=False, destructive=False)
+        if not count:
+            self.report({'WARNING'}, 'Select a nonzero UV edge to align its island')
+            return {'CANCELLED'}
+        context.window_manager['gm_uvs_last_status'] = f'{count} islands aligned by edge'
+        context.area.tag_redraw()
+        return {'FINISHED'}
+
+
+class GMUVS_OT_mirror(bpy.types.Operator):
+    """Mirror selected UVs around the center of their combined bounds"""
+    bl_idname = 'uv.gm_uvs_mirror'
+    bl_label = 'Mirror UVs'
+    bl_options = {'REGISTER', 'UNDO'}
+    axis: EnumProperty(name='Axis', items=(('X', 'X', 'Flip horizontally (U)'),
+                                          ('Y', 'Y', 'Flip vertically (V)')), default='X')
+
+    @classmethod
+    def poll(cls, context):
+        return is_uv_edit_mode(context)
+
+    def execute(self, context):
+        groups = selected_uvs(context)
+        axis = 0 if self.axis == 'X' else 1
+        values = [loop[uv].uv[axis] for _, _, uv, loops in groups for loop in loops]
+        if not values:
+            self.report({'WARNING'}, 'No selected UVs found')
+            return {'CANCELLED'}
+        total = min(values) + max(values)
+        for mesh, bm, uv, loops in groups:
+            for loop in loops:
+                loop[uv].uv[axis] = total-loop[uv].uv[axis]
+            bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
+        context.window_manager['gm_uvs_last_status'] = f'Mirrored {len(values)} UVs on {self.axis}'
+        context.area.tag_redraw()
+        return {'FINISHED'}
 
 
 class GMUVS_OT_align(bpy.types.Operator):

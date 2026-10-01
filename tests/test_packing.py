@@ -48,6 +48,13 @@ with bpy.context.temp_override(area=area, region=region):
     assert bpy.ops.uv.gm_uvs_pack_layer(action='ASSIGN') == {'FINISHED'}
     items = records(bpy.context)
     assert sorted(r[5] != 0 for r in items) == [False, True]
+    # Preview changes size immediately, then restores without accumulating.
+    layer = bpy.context.scene.gm_uvs_pack_layers[0]
+    for value in (.25, .75, 1.0, .5):
+        layer.max_scale = value
+        for _, _, uv, _, loops, uid in records(bpy.context):
+            width = max(loop[uv].uv.x for loop in loops)-min(loop[uv].uv.x for loop in loops)
+            assert abs(width - (.4*value if uid else .4)) < 1e-5
     uid = bpy.context.scene.gm_uvs_pack_layers[0].uid
     for sync in (False, True):
         bpy.context.scene.tool_settings.use_uv_select_sync = sync
@@ -64,12 +71,40 @@ with bpy.context.temp_override(area=area, region=region):
     assert bpy.ops.uv.gm_uvs_pack() == {'FINISHED'}
     # One square at half size, one unchanged: .04 + .16 = 20%.
     assert abs(bpy.context.scene.gm_uvs_pack_coverage - 20) < 1e-4
+    assert bpy.ops.uv.gm_uvs_pack() == {'FINISHED'}
+    assert abs(bpy.context.scene.gm_uvs_pack_coverage - 20) < 1e-4, 'Repeated pack compounded scale limit'
     for _, _, uv, _, loops, uid in records(bpy.context):
         coords = [loop[uv].uv for loop in loops]
         assert all(-1e-6 <= value <= 1+1e-6 for p in coords for value in p)
         width = max(p.x for p in coords)-min(p.x for p in coords)
         assert abs(width - (.2 if uid else .4)) < 1e-5
+    layer.max_scale = 1.0
+    for _, _, uv, _, loops, uid in records(bpy.context):
+        width = max(loop[uv].uv.x for loop in loops)-min(loop[uv].uv.x for loop in loops)
+        assert abs(width-.4) < 1e-5, 'Original size did not restore after packing'
+    # Eye hides assigned faces and packing ignores them; reveal preserves
+    # unrelated and independently hidden faces.
+    layer.visible = False
+    assert len(records(bpy.context)) == 1
+    assert all(r[5] == 0 for r in records(bpy.context))
+    assert bpy.ops.uv.gm_uvs_pack() == {'FINISHED'}
+    assert abs(bpy.context.scene.gm_uvs_pack_coverage-16) < 1e-4
+    layer.visible = True
+    assert len(records(bpy.context)) == 2
+    assigned_faces = [f for _, _, _, faces, _, assigned in records(bpy.context) if assigned for f in faces]
+    for face in assigned_faces:
+        face.hide_set(True)
+    layer.visible = False
+    layer.visible = True
+    assert len(records(bpy.context)) == 1, 'Revealed independently hidden faces'
+    for face in bm.faces:
+        face.hide_set(False)
+    layer.visible = False
+    assert bpy.ops.uv.gm_uvs_pack_layer(action='SELECT', layer_uid=uid) == {'FINISHED'}
+    assert layer.visible and len(records(bpy.context)) == 2
+    layer.visible = False
     assert bpy.ops.uv.gm_uvs_pack_layer(action='REMOVE') == {'FINISHED'}
+    assert len(records(bpy.context)) == 2, 'Removing layer left its islands hidden'
     assert all(r[5] == 0 for r in records(bpy.context))
 
 # Dense arrangements remain disjoint, including rotation and varying caps.

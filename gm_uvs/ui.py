@@ -39,10 +39,14 @@ class GMUVS_PT_main(bpy.types.Panel):
                 else:
                     direction, label = button
                     cell.operator("uv.gm_uvs_align", text=label).direction = direction
-        box.separator()
-        gravity_row = box.row()
-        gravity_row.scale_y = 1.2
-        gravity_row.operator("uv.gm_uvs_gravity", text="Gravity (Z)").axis = "Z"
+        mirror_row = box.row(align=True)
+        mirror_row.scale_y = 1.2
+        mirror_row.operator("uv.gm_uvs_mirror", text="Mirror |").axis = "X"
+        mirror_row.operator("uv.gm_uvs_mirror", text="Mirror —").axis = "Y"
+        edge_row = box.row(align=True)
+        edge_row.scale_y = 1.2
+        edge_row.operator("uv.gm_uvs_align_edge", text="Align |").direction = "VERTICAL"
+        edge_row.operator("uv.gm_uvs_align_edge", text="Align —").direction = "HORIZONTAL"
 
         status = context.window_manager.get("gm_uvs_last_status")
         if status:
@@ -53,6 +57,9 @@ class GMUVS_PT_main(bpy.types.Panel):
         layout.separator()
         box = layout.box()
         box.label(text="UV Tools")
+        gravity_row = box.row()
+        gravity_row.scale_y = 1.2
+        gravity_row.operator("uv.gm_uvs_gravity", text="Gravity (Z)").axis = "Z"
         row = box.row(align=True)
         quadrify = row.operator("uv.gm_uvs_quadrify", text="Quadrify")
         quadrify.mark_seam = context.scene.gm_uvs_quad_mark_seams
@@ -74,13 +81,21 @@ class GMUVS_PT_main(bpy.types.Panel):
         scene = context.scene
         row = box.row()
         row.template_list("GMUVS_UL_pack_layers", "", scene, "gm_uvs_pack_layers",
-                          scene, "gm_uvs_pack_layer_index", rows=3)
+                          scene, "gm_uvs_pack_layer_index", rows=3, sort_lock=True)
         column = row.column(align=True)
         column.operator("uv.gm_uvs_pack_layer", text="", icon="ADD").action = "ADD"
         column.operator("uv.gm_uvs_pack_layer", text="", icon="REMOVE").action = "REMOVE"
+        column.separator()
+        up = column.row()
+        up.enabled = bool(scene.gm_uvs_pack_layers) and scene.gm_uvs_pack_layer_index > 0
+        up.operator("uv.gm_uvs_pack_layer", text="", icon="TRIA_UP").action = "UP"
+        down = column.row()
+        down.enabled = scene.gm_uvs_pack_layer_index < len(scene.gm_uvs_pack_layers)-1
+        down.operator("uv.gm_uvs_pack_layer", text="", icon="TRIA_DOWN").action = "DOWN"
         if scene.gm_uvs_pack_layers:
             index = min(scene.gm_uvs_pack_layer_index, len(scene.gm_uvs_pack_layers)-1)
             box.prop(scene.gm_uvs_pack_layers[index], "max_scale")
+            box.prop(scene.gm_uvs_pack_layers[index], "stack_matching")
             row = box.row(align=True)
             row.operator("uv.gm_uvs_pack_layer", text="Assign Selected").action = "ASSIGN"
             row.operator("uv.gm_uvs_pack_layer", text="Unassign").action = "UNASSIGN"

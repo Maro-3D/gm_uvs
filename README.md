@@ -20,14 +20,28 @@ Open the UV Editing workspace, hover over the UV Editor, press **N**, and select
 
 The add-on gathers UV loops and islands like UniV's alignment workflow. In vertex or edge selection it moves the selected UV loops. In face selection it includes the whole UV island containing each selected face. All affected UVs move by the same offset, preserving their shape and spacing. Unselected islands remain in place.
 
-The **Gravity (Z)** button below the compass orients selected UV islands to the object's world-space direction, like UniV's Gravity tool. It preserves each island's center and works without UniV installed. The redo panel also offers X/Y axes, Flip, Additional Angle, and Correct Aspect.
+The **Gravity (Z)** button in **UV Tools** orients selected UV islands to the object's world-space direction, like UniV's Gravity tool. It preserves each island's center and works without UniV installed. The redo panel also offers X/Y axes, Flip, Additional Angle, and Correct Aspect.
 
 The **UV Tools** box uses bundled **UniV 4.0.0 Quadrify and Weld** implementations. Quadrify includes UniV's quad propagation, normalization, and handling of connected unselected corners. **Mark Seams**, **Correct Aspect**, and **Scale Independently** are enabled by default. Correct Aspect uses UniV's material-image lookup. The redo panel also exposes Unlink, Shear, and Use Texel Density. Weld includes UniV's Stitch fallback for separate UV islands, partial-edge welding, paired selection, and distance modes. Both tools work without a separate UniV installation.
 For alignment, the target is the 0–1 UV canvas. If the selection already touches an edge, that axis may not move. The status line below the buttons shows how many UV corners were found and the computed U/V offset. The operator supports UV Sync Selection, multi-object Edit Mode, and Undo. Other tool sections remain placeholders.
 
+**Mirror X** and **Mirror Y** below the alignment arrows flip selected UVs
+horizontally (U) or vertically (V) around the center of their combined bounds.
+They use the same selection handling as alignment, support multi-object Edit
+Mode and Undo, and preserve the selected layout's bounds and size.
+
+Below Mirror, **Align |** and **Align —** rotate the whole UV island containing a
+selected edge so that edge is vertical or horizontal. Use edge selection and
+select a reference edge, then click the desired direction. Rotation is around
+the island's bounding-box center and uses the nearest matching axis orientation.
+If multiple edges are selected within an island, the active mesh edge is used
+when available; otherwise the longest selected UV edge is used. UV Sync, multiple
+edited meshes, and Undo are supported. A mesh seam alone does not split the UV
+island when its coordinates remain connected.
+
 ### Packing layers
 
-In **Packing**, press **+** to create a layer and rename it in the list. Select
+In **Packing**, press **+** to create a layer and double-click its name to rename. Select
 UVs belonging to islands, then press **Assign Selected** to assign whole islands
 to the active layer. **Unassign** returns selected islands to the default group;
 removing a layer clears its assignments on visible edited islands. Assignments
@@ -35,9 +49,17 @@ are stored as mesh face attributes separately for each UV map and saved with
 the blend file. If joined faces have mixed assignments, the resulting island
 uses the default group until reassigned.
 
-Click the select icon beside a layer to select all its visible UV islands,
+Click the selection icon left of a layer's name to select all its UV islands,
 replacing the previous UV selection. This works with UV Sync on or off across
-edited meshes. Click the color swatch beside its name to choose its color.
+edited meshes. Clicking a name only activates the layer for editing settings;
+double-clicking the name renames it. Click the color swatch to choose its color.
+Use the up/down arrow buttons beside the list to move the active layer one row.
+Reordering preserves each
+layer's identity, UV assignments, color, scale limit, stacking and visibility.
+The eye icon hides/reveals the layer's islands and excludes hidden islands from
+packing. This uses Blender's face visibility, shared with the 3D editor in Edit
+Mode. Revealing a layer preserves faces hidden independently. Selecting a hidden
+layer reveals it; deleting a hidden layer reveals the faces it hid.
 **Show Layer Colors** displays a translucent fill and colored edges in the UV
 Editor. Colors are saved with the layer and follow UV edits and packing; they
 are editor overlays and do not change textures or materials.
@@ -47,10 +69,42 @@ the colors and reuse the prepared face triangles. Each UV editor has a separate
 cache. Other modal tools temporarily hide the overlay
 because they may change topology and invalidate those references.
 
-**Scale Limit** is a maximum linear multiplier relative to the UVs immediately
-before packing: `1` prevents enlargement, `0.5` caps size at half, and `2` allows
-up to double size. Unassigned islands use `1`. Islands may shrink further to
-fit; repeated packs apply the multiplier to their current size.
+The overlay caches its UV-space geometry and GPU batches. Pan/zoom uses the
+GPU projection without rebuilding geometry; normal redraws check face visibility
+and reuse the batches. Native UV edits invalidate the cache through mesh updates;
+undo/redo and file loads clear it. Live transforms refresh at up to 30 Hz using
+the existing UV references. Initial rebuilds and transform refreshes still cost
+more on large meshes.
+
+`tests/benchmark_layer_colors.py` measures CPU overlay preparation, not full
+application FPS. On a synthetic 10,000-quad mesh in Blender 5.0.1, this change
+reduced median ordinary redraw preparation from about 196 ms to 2 ms and
+navigation preparation from 79 ms to approximately 0.01 ms. A cold build was
+about 84 ms, and a forced live-transform refresh about 28 ms. These are local
+measurements and do not include GPU drawing or batch creation.
+
+**Scale Limit** immediately previews the layer's island sizes: `0.5` is half
+size, `2` is double size, and `1` restores original size. Each island scales
+around its current center, preserving its position and orientation. Original
+size is recorded at first assignment per UV map and stored with the mesh.
+Existing assignments from older versions record their reference size on the
+first scale change or pack. The reference uses UV perimeter, so manual shape
+edits are preserved rather than replacing coordinates with an older layout.
+Packing uses the same original-size reference as its maximum scale, avoiding
+double scaling or cumulative shrinking on repeated packs. Islands may shrink
+further to fit. Unassigned islands retain their current-size limit of `1`.
+
+Enable **Stack Matching Islands** on a layer to immediately overlay matching
+UV polygon layouts within that layer. Matching allows translation, rotation,
+and uniform scaling, but does not generate mirrored copies. Face order and
+corner order may differ; polygon shapes and face layouts must match within
+UV-coordinate tolerance. Different shapes and different layers stay separate.
+The smallest original matching island sets the stack size to respect every
+member's scale cap. Changing Scale Limit reapplies stacking. Packing treats
+each matching stack as one item and counts its covered area once.
+Turning the toggle off stops stacking; pack again to separate the islands.
+Original sizes remain stored, so disabling stacking and setting Scale Limit
+to `1` restores each island's own size.
 
 **Pack UVs & Measure Coverage** packs all visible islands across meshes in Edit
 Mode into the 0-1 tile, regardless of selection. Hidden faces are excluded.
@@ -100,6 +154,7 @@ Run the regression tests with Blender 5.0+:
 
 ```powershell
 blender --background --factory-startup --python-exit-code 1 --python tests/test_align.py
+blender --background --factory-startup --python-exit-code 1 --python tests/test_align_edge.py
 blender --background --factory-startup --python-exit-code 1 --python tests/test_gravity.py
 blender --background --factory-startup --python-exit-code 1 --python tests/test_quadrify.py
 blender --background --factory-startup --python-exit-code 1 --python tests/test_weld.py
@@ -107,6 +162,9 @@ blender --background --factory-startup --python-exit-code 1 --python tests/test_
 blender --background --factory-startup --python-exit-code 1 --python tests/test_registration.py
 blender --background --factory-startup --python-exit-code 1 --python tests/test_packing.py
 blender --background --factory-startup --python-exit-code 1 --python tests/test_layer_scale.py
+blender --background --factory-startup --python-exit-code 1 --python tests/test_stacking.py
+blender --background --factory-startup --python-exit-code 1 --python tests/test_layer_reorder.py
+blender --background --factory-startup --python-exit-code 1 --python tests/test_overlay_cache.py
 blender --background --factory-startup --python-exit-code 1 --python tests/test_workflows.py
 ```
 

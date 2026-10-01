@@ -2,7 +2,7 @@
 import bpy
 from bpy.props import BoolProperty, PointerProperty
 
-from .transform import GMUVS_OT_align, GMUVS_OT_gravity
+from .transform import GMUVS_OT_align, GMUVS_OT_gravity, GMUVS_OT_mirror, GMUVS_OT_align_edge
 from ._univ.quadrify import UNIV_OT_Quadrify
 from ._univ.weld import UNIV_OT_Weld
 from .ui import GMUVS_PT_main
@@ -22,7 +22,7 @@ class GMUVS_OT_weld(UNIV_OT_Weld):
 
 
 CLASSES = (
-    GMUVS_PG_univ_settings, GMUVS_OT_align, GMUVS_OT_gravity,
+    GMUVS_PG_univ_settings, GMUVS_OT_align, GMUVS_OT_gravity, GMUVS_OT_mirror, GMUVS_OT_align_edge,
     GMUVS_OT_quadrify, GMUVS_OT_weld, *packing.CLASSES, GMUVS_PT_main,
 )
 QUADRIFY_SETTINGS = (
